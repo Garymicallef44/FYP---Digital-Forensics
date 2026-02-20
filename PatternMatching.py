@@ -27,7 +27,7 @@ def loadImage(path):
 
 
 def extractSIFT(image):
-    sift = cv2.SIFT_create(nfeatures = 5000, contrastThreshold = 0.03, edgeThreshold = 10)
+    sift = cv2.SIFT_create(nfeatures = 3000, contrastThreshold = 0.03, edgeThreshold = 10)
     keypoints, descriptors = sift.detectAndCompute(image, None)
     return keypoints, descriptors
 
@@ -143,8 +143,19 @@ def compareimages(path1, path2, showMatches = True):
     forward, backward = matchFeatures(desc1, desc2)
     goodMatches = filterMatches(forward, backward)
     inliers, H = geometricVerification(kp1, kp2, goodMatches)
-
     score, hquality = similarityScore(inliers, goodMatches, H)
+
+
+    img2_inv = cv2.bitwise_not(img2)
+    kp2_inv, desc2_inv = extractSIFT(img2_inv)
+    fwd_inv, bwd_inv = matchFeatures(desc1, desc2_inv)
+    goodMatches_inv = filterMatches(fwd_inv, bwd_inv)
+    inliers_inv, H_inv = geometricVerification(kp1, kp2_inv, goodMatches_inv)
+    score_inv, hquality_inv = similarityScore(inliers_inv, goodMatches_inv, H_inv)
+
+    if score_inv > score:
+        kp2, goodMatches, inliers, H, score, hquality = kp2_inv, goodMatches_inv, inliers_inv, H_inv, score_inv, hquality_inv
+        img2 = img2_inv
 
     print(f"Similarity Score: {score:.2f}%")
     print(f"Good matches (ratio + mutual): {len(goodMatches)}")
@@ -160,12 +171,13 @@ def compareimages(path1, path2, showMatches = True):
         h,w = vis.shape[:2]
         scale = min(width / w, height / h)
         resized_vis = cv2.resize(vis, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+        cv2.namedWindow("Feature matches", cv2.WINDOW_NORMAL)
         cv2.imshow("Feature matches", resized_vis)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
     return score
 
-imgA = r"C:\Users\User\Documents\GitHub\FYP---Digital-Forensics\Imgtocompare\opencvlogo.jpg"
-imgB = r"C:\Users\User\Documents\GitHub\FYP---Digital-Forensics\Personaldataset\opencvlogo.jpg"
+imgA = r"C:\Users\User\Documents\GitHub\FYP---Digital-Forensics\Personaldataset\barrakkastatue.jpg"
+imgB = r"C:\Users\User\Documents\GitHub\FYP---Digital-Forensics\Personaldataset\barrakkastatuenegative.jpg"
 
 compareimages(imgA, imgB) 

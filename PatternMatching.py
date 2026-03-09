@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import os
+from ProvenanceEvidence import ProvenanceEvidence
 
 
 def loadImage(path):
@@ -10,6 +11,8 @@ def loadImage(path):
     img = cv2.imread(path)
     if img is None:
         raise ValueError(f"Error: Could not read image: {path}")
+
+    pixelcount = img.shape[0] * img.shape[1]
 
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     gray = cv2.GaussianBlur(gray, (3, 3), 0)
@@ -23,11 +26,11 @@ def loadImage(path):
         scale = max_dim / max(h, w)
         enhanced = cv2.resize(enhanced, None, fx = scale, fy = scale, interpolation = cv2.INTER_AREA)
 
-    return enhanced
+    return enhanced, pixelcount
 
 
 def extractSIFT(image):
-    sift = cv2.SIFT_create(nfeatures = 3000, contrastThreshold = 0.03, edgeThreshold = 10)
+    sift = cv2.SIFT_create(nfeatures = 5000, contrastThreshold = 0.03, edgeThreshold = 10)
     keypoints, descriptors = sift.detectAndCompute(image, None)
     return keypoints, descriptors
 
@@ -130,26 +133,40 @@ def similarityScore(inliers, goodMatches, H = None):
     return score, hquality
 
 
-def compareimages(path1, path2, showMatches = True):
+def compareImages(path1, path2, showMatches = False):
     print(f"\n Comparing: \n - {path1}\n - {path2}")
 
-    img1 = loadImage(path1)
-    img2 = loadImage(path2)
+    img1, pixels1 = loadImage(path1)
+    img2, pixels2 = loadImage(path2)
     kp1, desc1 = extractSIFT(img1)
     kp2, desc2 = extractSIFT(img2)
 
     print(f"Keypoints: {len(kp1)} vs {len(kp2)}")
 
-    forward, backward = matchFeatures(desc1, desc2)
-    goodMatches = filterMatches(forward, backward)
+    forward, _ = matchFeatures(desc1, desc2)
+    goodMatches = []
+    for pair in forward:
+        if len(pair) < 2:
+            continue
+        m, n = pair
+        if m.distance < 0.75 * n.distance:
+            goodMatches.append(m)
+
     inliers, H = geometricVerification(kp1, kp2, goodMatches)
     score, hquality = similarityScore(inliers, goodMatches, H)
 
 
     img2_inv = cv2.bitwise_not(img2)
     kp2_inv, desc2_inv = extractSIFT(img2_inv)
-    fwd_inv, bwd_inv = matchFeatures(desc1, desc2_inv)
-    goodMatches_inv = filterMatches(fwd_inv, bwd_inv)
+    fwd_inv, _ = matchFeatures(desc1, desc2_inv)
+    goodMatches_inv = []
+    for pair in fwd_inv:
+        if len(pair) < 2:
+            continue
+        m, n = pair
+        if m.distance < 0.75 * n.distance:
+            goodMatches_inv.append(m)
+
     inliers_inv, H_inv = geometricVerification(kp1, kp2_inv, goodMatches_inv)
     score_inv, hquality_inv = similarityScore(inliers_inv, goodMatches_inv, H_inv)
 
@@ -157,14 +174,16 @@ def compareimages(path1, path2, showMatches = True):
         kp2, goodMatches, inliers, H, score, hquality = kp2_inv, goodMatches_inv, inliers_inv, H_inv, score_inv, hquality_inv
         img2 = img2_inv
 
+    det = float(np.linalg.det(H)) if H is not None else 0.0
+
     print(f"Similarity Score: {score:.2f}%")
-    print(f"Good matches (ratio + mutual): {len(goodMatches)}")
+    print(f"Good matches (forward ratio): {len(goodMatches)}")
     print(f"Inliers (after RANSAC): {len(inliers)}")
     if goodMatches:
         print(f"Inlier ratio: {len(inliers)/len(goodMatches):.2%}")
     print(f"Homography quality: {hquality:.4f}")
 
-    if showMatches:
+    if showMatches == True:
         width = 4000
         height = 1800
         vis = cv2.drawMatches(img1, kp1, img2, kp2, inliers, None, flags=cv2.DrawMatchesFlags_DRAW_RICH_KEYPOINTS)
@@ -175,9 +194,48 @@ def compareimages(path1, path2, showMatches = True):
         cv2.imshow("Feature matches", resized_vis)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
-    return score
 
-imgA = r"C:\Users\User\Documents\GitHub\FYP---Digital-Forensics\Personaldataset\barrakkastatue.jpg"
-imgB = r"C:\Users\User\Documents\GitHub\FYP---Digital-Forensics\Personaldataset\barrakkastatuenegative.jpg"
+    return ProvenanceEvidence(score, len(inliers), len(goodMatches), len(kp1), len(kp2), det, pixels1, pixels2)
 
-compareimages(imgA, imgB) 
+
+def compareFromFeatures(img1, kp1, desc1, pixels1, img2, kp2, desc2, pixels2):
+    forward, _ = matchFeatures(desc1, desc2)
+    goodMatches = []
+    for pair in forward:
+        if len(pair) < 2:
+            continue
+        m, n = pair
+        if m.distance < 0.75 * n.distance:
+            goodMatches.append(m)
+
+    inliers, H = geometricVerification(kp1, kp2, goodMatches)
+    score, hquality = similarityScore(inliers, goodMatches, H)
+
+    img2_inv = cv2.bitwise_not(img2)
+    kp2_inv, desc2_inv = extractSIFT(img2_inv)
+    fwd_inv, _ = matchFeatures(desc1, desc2_inv)
+    goodMatches_inv = []
+    for pair in fwd_inv:
+        if len(pair) < 2:
+            continue
+        m, n = pair
+        if m.distance < 0.75 * n.distance:
+            goodMatches_inv.append(m)
+
+    inliers_inv, H_inv = geometricVerification(kp1, kp2_inv, goodMatches_inv)
+    score_inv, hquality_inv = similarityScore(inliers_inv, goodMatches_inv, H_inv)
+
+    if score_inv > score:
+        kp2, goodMatches, inliers, H, score, hquality = kp2_inv, goodMatches_inv, inliers_inv, H_inv, score_inv, hquality_inv
+
+    det = float(np.linalg.det(H)) if H is not None else 0.0
+
+    return ProvenanceEvidence(score, len(inliers), len(goodMatches), len(kp1), len(kp2), det, pixels1, pixels2)
+
+
+if __name__ == "__main__":
+    imgA = r"C:\Users\User\Documents\GitHub\FYP---Digital-Forensics\Personaldataset\barrakkastatue.jpg" # Original img
+    imgB = r"C:\Users\User\Documents\GitHub\FYP---Digital-Forensics\Personaldataset\barrakkastatuenegative.jpg" # Derivation img
+
+    evidence = compareImages(imgA, imgB, showMatches = True)
+    print(f"Similarity score: {evidence.score:.2f}  \n Inliers: {evidence.inliers}  \nGood matches: {evidence.good_matches}")

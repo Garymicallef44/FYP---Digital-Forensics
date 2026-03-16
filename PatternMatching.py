@@ -133,6 +133,38 @@ def similarityScore(inliers, goodMatches, H = None):
     return score, hquality
 
 
+def ratioFilter(matches, ratio = 0.75):
+    good = []
+    for pair in matches:
+        if len(pair) < 2:
+            continue
+        m, n = pair
+        if m.distance < ratio * n.distance:
+            good.append(m)
+    return good
+
+
+def coreMatch(img1, kp1, desc1, img2, kp2, desc2):
+    forward, _ = matchFeatures(desc1, desc2)
+    goodMatches = ratioFilter(forward)
+    inliers, H = geometricVerification(kp1, kp2, goodMatches)
+    score, hquality = similarityScore(inliers, goodMatches, H)
+
+    img2_inv = cv2.bitwise_not(img2)
+    kp2_inv, desc2_inv = extractSIFT(img2_inv)
+    fwd_inv, _ = matchFeatures(desc1, desc2_inv)
+    goodMatches_inv = ratioFilter(fwd_inv)
+    inliers_inv, H_inv = geometricVerification(kp1, kp2_inv, goodMatches_inv)
+    score_inv, hquality_inv = similarityScore(inliers_inv, goodMatches_inv, H_inv)
+
+    if score_inv > score:
+        kp2, goodMatches, inliers, H, score, hquality = kp2_inv, goodMatches_inv, inliers_inv, H_inv, score_inv, hquality_inv
+        img2 = img2_inv
+
+    det = float(np.linalg.det(H)) if H is not None else 0.0
+    return kp2, goodMatches, inliers, H, score, hquality, det, img2
+
+
 def compareImages(path1, path2, showMatches = False):
     print(f"\n Comparing: \n - {path1}\n - {path2}")
 
@@ -143,38 +175,8 @@ def compareImages(path1, path2, showMatches = False):
 
     print(f"Keypoints: {len(kp1)} vs {len(kp2)}")
 
-    forward, _ = matchFeatures(desc1, desc2)
-    goodMatches = []
-    for pair in forward:
-        if len(pair) < 2:
-            continue
-        m, n = pair
-        if m.distance < 0.75 * n.distance:
-            goodMatches.append(m)
-
-    inliers, H = geometricVerification(kp1, kp2, goodMatches)
-    score, hquality = similarityScore(inliers, goodMatches, H)
-
-
-    img2_inv = cv2.bitwise_not(img2)
-    kp2_inv, desc2_inv = extractSIFT(img2_inv)
-    fwd_inv, _ = matchFeatures(desc1, desc2_inv)
-    goodMatches_inv = []
-    for pair in fwd_inv:
-        if len(pair) < 2:
-            continue
-        m, n = pair
-        if m.distance < 0.75 * n.distance:
-            goodMatches_inv.append(m)
-
-    inliers_inv, H_inv = geometricVerification(kp1, kp2_inv, goodMatches_inv)
-    score_inv, hquality_inv = similarityScore(inliers_inv, goodMatches_inv, H_inv)
-
-    if score_inv > score:
-        kp2, goodMatches, inliers, H, score, hquality = kp2_inv, goodMatches_inv, inliers_inv, H_inv, score_inv, hquality_inv
-        img2 = img2_inv
-
-    det = float(np.linalg.det(H)) if H is not None else 0.0
+    kp2, goodMatches, inliers, H, score, hquality, det, img2 = coreMatch(
+        img1, kp1, desc1, img2, kp2, desc2)
 
     print(f"Similarity Score: {score:.2f}%")
     print(f"Good matches (forward ratio): {len(goodMatches)}")
@@ -199,36 +201,7 @@ def compareImages(path1, path2, showMatches = False):
 
 
 def compareFromFeatures(img1, kp1, desc1, pixels1, img2, kp2, desc2, pixels2):
-    forward, _ = matchFeatures(desc1, desc2)
-    goodMatches = []
-    for pair in forward:
-        if len(pair) < 2:
-            continue
-        m, n = pair
-        if m.distance < 0.75 * n.distance:
-            goodMatches.append(m)
-
-    inliers, H = geometricVerification(kp1, kp2, goodMatches)
-    score, hquality = similarityScore(inliers, goodMatches, H)
-
-    img2_inv = cv2.bitwise_not(img2)
-    kp2_inv, desc2_inv = extractSIFT(img2_inv)
-    fwd_inv, _ = matchFeatures(desc1, desc2_inv)
-    goodMatches_inv = []
-    for pair in fwd_inv:
-        if len(pair) < 2:
-            continue
-        m, n = pair
-        if m.distance < 0.75 * n.distance:
-            goodMatches_inv.append(m)
-
-    inliers_inv, H_inv = geometricVerification(kp1, kp2_inv, goodMatches_inv)
-    score_inv, hquality_inv = similarityScore(inliers_inv, goodMatches_inv, H_inv)
-
-    if score_inv > score:
-        kp2, goodMatches, inliers, H, score, hquality = kp2_inv, goodMatches_inv, inliers_inv, H_inv, score_inv, hquality_inv
-
-    det = float(np.linalg.det(H)) if H is not None else 0.0
+    kp2, goodMatches, inliers, H, score, hquality, det, _ = coreMatch(img1, kp1, desc1, img2, kp2, desc2)
 
     return ProvenanceEvidence(score, len(inliers), len(goodMatches), len(kp1), len(kp2), det, pixels1, pixels2)
 

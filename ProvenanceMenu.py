@@ -234,9 +234,8 @@ class ProvenanceGUI:
             lines += self._format_direction_stats(label, nameA, nameB, ev)
         lines.append("")
 
-        lines.append(f"  Inferred direction:")
+        lines.append(f"  Inferred direction (source → derived):")
         lines.append(f"    {os.path.basename(direction_src)}  →  {os.path.basename(direction_dst)}")
-        lines.append(f"    (source → derived)")
 
         self._set_stats("\n".join(lines))
 

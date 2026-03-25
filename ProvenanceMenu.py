@@ -5,6 +5,8 @@ import cv2
 import os
 import threading
 import itertools
+import textwrap
+import networkx as nx
 import PatternMatching as pm
 from ProvenanceAnalysis import ProvenanceAnalyzer
 
@@ -87,12 +89,13 @@ class ProvenanceGUI:
                                   font=("Consolas", 10), bg="#f8f8f8", relief=tk.FLAT)
         self.stats_text.pack(fill=tk.BOTH, expand=True)
 
-        # provenance summary
-        bottom = ttk.LabelFrame(self.root, text="Provenance Graph Summary", padding=8)
-        bottom.pack(fill=tk.X, padx=8, pady=(0, 8))
-        self.summary_text = tk.Text(bottom, wrap=tk.WORD, height=6, state=tk.DISABLED,
-                                    font=("Consolas", 10), bg="#f8f8f8", relief=tk.FLAT)
-        self.summary_text.pack(fill=tk.BOTH, expand=True)
+        # graph view
+        graph_frame = ttk.LabelFrame(self.root, text="Graph View", padding=4)
+        graph_frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=(4, 8))
+        self.graph_canvas = tk.Canvas(graph_frame, height=260, bg="white", highlightthickness=1,
+                          highlightbackground="#d9d9d9")
+        self.graph_canvas.pack(fill=tk.BOTH, expand=True)
+        self.graph_canvas.bind("<Configure>", self._on_graph_resize)
 
 
     def _browse_folder(self):
@@ -110,7 +113,6 @@ class ProvenanceGUI:
         self.pair_list.delete(0, tk.END)
         self.comparison_results.clear()
         self._clear_detail()
-        self._set_summary("")
         self.status_var.set("Loading images…")
         self.progress["value"] = 0
 
@@ -172,31 +174,14 @@ class ProvenanceGUI:
         self.progress["value"] = 100
         self.run_btn.configure(state=tk.NORMAL)
 
+        # Populate pair list
         for p1, p2, ev12, ev21 in results:
             n1 = os.path.basename(p1)
             n2 = os.path.basename(p2)
             best = max(ev12.score, ev21.score)
             self.pair_list.insert(tk.END, f"{n1}  →  {n2}   [{best:.1f}%]")
 
-        # Provenance summary
-        graph = self.analyzer.graph
-        lines = []
-        lines.append("Edges (source → derived):")
-        if graph.number_of_edges() == 0:
-            lines.append("  No edges above similarity threshold.")
-        for u, v, data in graph.edges(data=True):
-            lines.append(f"  {os.path.basename(u)}  →  {os.path.basename(v)}   "
-                         f"(similarity: {data['weight']:.2f}%)")
-
-        roots = self.analyzer.rootCandidates()
-        lines.append("")
-        lines.append("Most likely original image(s):")
-        for r in roots:
-            lines.append(f"  ★  {os.path.basename(r)}")
-        if not roots:
-            lines.append("  (none detected)")
-
-        self._set_summary("\n".join(lines))
+        self._draw_graph()
         self.status_var.set(f"Done – {len(results)} comparisons, "
                             f"{graph.number_of_edges()} graph edges.")
 
@@ -274,11 +259,99 @@ class ProvenanceGUI:
         self.stats_text.insert(tk.END, text)
         self.stats_text.configure(state=tk.DISABLED)
 
-    def _set_summary(self, text):
-        self.summary_text.configure(state=tk.NORMAL)
-        self.summary_text.delete("1.0", tk.END)
-        self.summary_text.insert(tk.END, text)
-        self.summary_text.configure(state=tk.DISABLED)
+    def _on_graph_resize(self, _event):
+        self._draw_graph()
+
+    def _draw_graph(self):
+        if not hasattr(self, "graph_canvas"):
+            return
+
+        graph = self.analyzer.graph
+        canvas = self.graph_canvas
+        canvas.delete("all")
+
+        width = max(canvas.winfo_width(), 300)
+        height = max(canvas.winfo_height(), 180)
+
+        if graph.number_of_nodes() == 0:
+            canvas.create_text(width // 2, height // 2,
+                               text="No provenance graph available yet.",
+                               fill="#555555", font=("Consolas", 11))
+            return
+
+        roots = set(self.analyzer.rootCandidates())
+        pos = nx.spring_layout(graph, seed=42)
+
+        node_radius = 18
+        pad = 70  # Increased padding to accommodate labels and prevent cutoff
+
+        xs = [p[0] for p in pos.values()]
+        ys = [p[1] for p in pos.values()]
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+
+        def scale_x(x):
+            if max_x == min_x:
+                return width / 2
+            return pad + (x - min_x) / (max_x - min_x) * (width - 2 * pad)
+
+        def scale_y(y):
+            if max_y == min_y:
+                return height / 2
+            return pad + (y - min_y) / (max_y - min_y) * (height - 2 * pad)
+
+        screen_pos = {n: (scale_x(x), scale_y(y)) for n, (x, y) in pos.items()}
+
+        for u, v, data in graph.edges(data=True):
+            x1, y1 = screen_pos[u]
+            x2, y2 = screen_pos[v]
+
+            dx, dy = x2 - x1, y2 - y1
+            dist = max((dx * dx + dy * dy) ** 0.5, 1e-6)
+            ux, uy = dx / dist, dy / dist
+
+            sx = x1 + ux * node_radius
+            sy = y1 + uy * node_radius
+            ex = x2 - ux * node_radius
+            ey = y2 - uy * node_radius
+
+            canvas.create_line(sx, sy, ex, ey, arrow=tk.LAST, arrowshape=(14, 16, 6),
+                               width=2.5, fill="#1f6fb2")
+
+            mid_x = (x1 + x2) / 2
+            mid_y = (y1 + y2) / 2
+            label_id = canvas.create_text(mid_x, mid_y - 12, text=f"{data['weight']:.1f}%",
+                                          fill="#0e3f6b", font=("Consolas", 9, "bold"))
+            bx1, by1, bx2, by2 = canvas.bbox(label_id)
+            canvas.create_rectangle(bx1 - 2, by1 - 1, bx2 + 2, by2 + 1,
+                                    fill="white", outline="")
+            canvas.tag_raise(label_id)
+
+        for node, (x, y) in screen_pos.items():
+            is_root = node in roots
+            fill = "#d6f5d6" if is_root else "#f6fafe"
+            outline = "#2b7a2b" if is_root else "#2a6fbb"
+            width_px = 3 if is_root else 2
+            node_name = os.path.basename(node)
+            wrapped_name = "\n".join(textwrap.wrap(node_name, width=16)[:2])
+            if len(textwrap.wrap(node_name, width=16)) > 2:
+                wrapped_name += "..."
+
+            canvas.create_oval(x - node_radius, y - node_radius,
+                               x + node_radius, y + node_radius,
+                               fill=fill, outline=outline, width=width_px)
+
+            name_id = canvas.create_text(x, y + node_radius + 14, text=wrapped_name,
+                                         fill="#0d1d2f", font=("Consolas", 9, "bold"),
+                                         width=120, justify=tk.CENTER)
+            nx1, ny1, nx2, ny2 = canvas.bbox(name_id)
+            canvas.create_rectangle(nx1 - 4, ny1 - 2, nx2 + 4, ny2 + 2,
+                                    fill="#ffffff", outline="#d9e1ea")
+            canvas.tag_raise(name_id)
+
+            if is_root:
+                canvas.create_text(x, y - node_radius - 10, text="ROOT",
+                                   fill="#2b7a2b", font=("Consolas", 8, "bold"))
 
     def _clear_detail(self):
         self.photo_refs.clear()
@@ -287,6 +360,8 @@ class ProvenanceGUI:
         self.name_label_a.configure(text="")
         self.name_label_b.configure(text="")
         self._set_stats("")
+        if hasattr(self, "graph_canvas"):
+            self.graph_canvas.delete("all")
 
 
 if __name__ == "__main__":

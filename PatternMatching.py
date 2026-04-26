@@ -30,7 +30,7 @@ def loadImage(path):
 
 
 def extractSIFT(image):
-    sift = cv2.SIFT_create(nfeatures = 5000, contrastThreshold = 0.03, edgeThreshold = 10)
+    sift = cv2.SIFT_create(nfeatures = 3000, contrastThreshold = 0.03, edgeThreshold = 10)
     keypoints, descriptors = sift.detectAndCompute(image, None)
     return keypoints, descriptors
 
@@ -47,33 +47,6 @@ def matchFeatures(desc1, desc2):
     forward = flann.knnMatch(desc1, desc2, k = 2)
     backward = flann.knnMatch(desc2, desc1, k = 2)
     return forward, backward
-
-
-def filterMatches(forward, backward, ratio = 0.75):
-    goodfwd = {}
-    for pair in forward:
-        if len(pair) < 2:
-            continue
-        m, n = pair
-        if m.distance < ratio * n.distance:
-            goodfwd[m.queryIdx] = m
-
-    goodbwd = {}
-    for pair in backward:
-        if len(pair) < 2:
-            continue
-        m, n = pair
-        if m.distance < ratio * n.distance:
-            goodbwd[m.queryIdx] = m
-
-    mutual = []
-    for qIdx, m in goodfwd.items():
-        tIdx = m.trainIdx
-        if tIdx in goodbwd and goodbwd[tIdx].trainIdx == qIdx:
-            mutual.append(m)
-
-    return mutual
-
 
 def geometricVerification(kp1, kp2, goodMatches, reprojthresh = 3.0):
     if len(goodMatches) < 4:
@@ -207,8 +180,8 @@ def compareFromFeatures(img1, kp1, desc1, pixels1, img2, kp2, desc2, pixels2):
 
 
 if __name__ == "__main__":
-    imgA = r"C:\Users\User\Documents\GitHub\FYP---Digital-Forensics\Personaldataset\barrakkastatue.jpg" # Original img
-    imgB = r"C:\Users\User\Documents\GitHub\FYP---Digital-Forensics\Personaldataset\barrakkastatuenegative.jpg" # Derivation img
+    imgA = r"C:\Users\User\Documents\GitHub\FYP---Digital-Forensics\TestPath\ringroad.jpg" # Original img
+    imgB = r"C:\Users\User\Documents\GitHub\FYP---Digital-Forensics\TestPath\ringroad2.jpg" # Derivation img
 
     evidence = compareImages(imgA, imgB, showMatches = True)
     print(f"Similarity score: {evidence.score:.2f}  \n Inliers: {evidence.inliers}  \nGood matches: {evidence.good_matches}")

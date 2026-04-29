@@ -89,6 +89,10 @@ class ProvenanceGUI:
                                   font=("Consolas", 10), bg="#f8f8f8", relief=tk.FLAT)
         self.stats_text.pack(fill=tk.BOTH, expand=True)
 
+        self.view_match_btn = ttk.Button(right_frame, text="View Match Visualization",
+                                         command=self._show_matches_visualization, state=tk.DISABLED)
+        self.view_match_btn.pack(pady=(8, 0))
+
         # graph view
         graph_frame = ttk.LabelFrame(self.root, text="Graph View", padding=4)
         graph_frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=(4, 8))
@@ -182,9 +186,6 @@ class ProvenanceGUI:
             self.pair_list.insert(tk.END, f"{n1}  →  {n2}   [{best:.1f}%]")
 
         self._draw_graph()
-        self.status_var.set(f"Done – {len(results)} comparisons, "
-                            f"{graph.number_of_edges()} graph edges.")
-
         if results:
             self.pair_list.selection_set(0)
             self._show_pair(0)
@@ -193,6 +194,7 @@ class ProvenanceGUI:
         sel = self.pair_list.curselection()
         if sel:
             self._show_pair(sel[0])
+            self.view_match_btn.configure(state=tk.NORMAL)
 
     def _show_pair(self, index):
         p1, p2, ev12, ev21 = self.comparison_results[index]
@@ -223,6 +225,15 @@ class ProvenanceGUI:
         lines.append(f"    {os.path.basename(direction_src)}  →  {os.path.basename(direction_dst)}")
 
         self._set_stats("\n".join(lines))
+
+    def _show_matches_visualization(self):
+        sel = self.pair_list.curselection()
+        if not sel:
+            return
+        p1, p2, _, _ = self.comparison_results[sel[0]]
+        
+        thread = threading.Thread(target=pm.compareImages, args=(p1, p2, True), daemon=True)
+        thread.start()
 
     def _format_direction_stats(self, label, nameA, nameB, ev):
         lines = []
@@ -360,6 +371,7 @@ class ProvenanceGUI:
         self.name_label_a.configure(text="")
         self.name_label_b.configure(text="")
         self._set_stats("")
+        self.view_match_btn.configure(state=tk.DISABLED)
         if hasattr(self, "graph_canvas"):
             self.graph_canvas.delete("all")
 

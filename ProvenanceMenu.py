@@ -89,8 +89,8 @@ class ProvenanceGUI:
                                   font=("Consolas", 10), bg="#f8f8f8", relief=tk.FLAT)
         self.stats_text.pack(fill=tk.BOTH, expand=True)
 
-        self.view_match_btn = ttk.Button(right_frame, text="View Match Visualization",
-                                         command=self._show_matches_visualization, state=tk.DISABLED)
+        self.view_match_btn = ttk.Button(right_frame, text="View Match Visualisation",
+                                         command=self._show_matches_visualisation, state=tk.DISABLED)
         self.view_match_btn.pack(pady=(8, 0))
 
         # graph view
@@ -226,7 +226,7 @@ class ProvenanceGUI:
 
         self._set_stats("\n".join(lines))
 
-    def _show_matches_visualization(self):
+    def _show_matches_visualisation(self):
         sel = self.pair_list.curselection()
         if not sel:
             return

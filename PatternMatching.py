@@ -4,6 +4,7 @@ import os
 from ProvenanceEvidence import ProvenanceEvidence
 
 
+# Loads, preprocesses, and resizes an image from a given path.
 def loadImage(path):
     if not os.path.exists(path):
         raise FileNotFoundError(f"Error: File does not exist in: {path}")
@@ -29,12 +30,14 @@ def loadImage(path):
     return enhanced, pixelcount
 
 
+# Extracts SIFT keypoints and descriptors from a given image.
 def extractSIFT(image):
     sift = cv2.SIFT_create(nfeatures = 3000, contrastThreshold = 0.03, edgeThreshold = 10)
     keypoints, descriptors = sift.detectAndCompute(image, None)
     return keypoints, descriptors
 
 
+# Matches descriptors from two images using a FLANN-based matcher.
 def matchFeatures(desc1, desc2):
     if desc1 is None or desc2 is None:
         return [], []
@@ -48,6 +51,7 @@ def matchFeatures(desc1, desc2):
     backward = flann.knnMatch(desc2, desc1, k = 2)
     return forward, backward
 
+# Performs geometric verification of matches using RANSAC.
 def geometricVerification(kp1, kp2, goodMatches, reprojthresh = 3.0):
     if len(goodMatches) < 4:
         return [], None
@@ -64,6 +68,7 @@ def geometricVerification(kp1, kp2, goodMatches, reprojthresh = 3.0):
     return inliers, H
 
 
+# Validates a homography matrix to check if it represents an actual transformation.
 def validateHomography(H):
     if H is None:
         return 0.0
@@ -82,6 +87,7 @@ def validateHomography(H):
     return detquality * condquality
 
 
+# Calculates similarity score based on inlier ratio, count, and homography quality.
 def similarityScore(inliers, goodMatches, H = None):
     if not goodMatches:
         return 0.0, 0.0
@@ -106,6 +112,7 @@ def similarityScore(inliers, goodMatches, H = None):
     return score, hquality
 
 
+# Filters matches using Lowe's ratio test.
 def ratioFilter(matches, ratio = 0.75):
     good = []
     for pair in matches:
@@ -117,6 +124,7 @@ def ratioFilter(matches, ratio = 0.75):
     return good
 
 
+# Core matching logic that includes feature matching, filtering, and geometric verification.
 def coreMatch(img1, kp1, desc1, img2, kp2, desc2):
     forward, _ = matchFeatures(desc1, desc2)
     goodMatches = ratioFilter(forward)
@@ -138,6 +146,7 @@ def coreMatch(img1, kp1, desc1, img2, kp2, desc2):
     return kp2, goodMatches, inliers, H, score, hquality, det, img2
 
 
+# Compares two images from their file paths optionally visualizes matches (it was made to be optional for testing purposes).
 def compareImages(path1, path2, showMatches = False):
     print(f"\n Comparing: \n - {path1}\n - {path2}")
 
@@ -173,6 +182,7 @@ def compareImages(path1, path2, showMatches = False):
     return ProvenanceEvidence(score, len(inliers), len(goodMatches), len(kp1), len(kp2), det, pixels1, pixels2)
 
 
+# Compares two images using their pre-computed features.
 def compareFromFeatures(img1, kp1, desc1, pixels1, img2, kp2, desc2, pixels2):
     kp2, goodMatches, inliers, H, score, hquality, det, _ = coreMatch(img1, kp1, desc1, img2, kp2, desc2)
 

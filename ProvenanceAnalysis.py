@@ -4,10 +4,12 @@ import networkx as nx
 import PatternMatching as pm
 
 class ProvenanceAnalyzer:
+    # Initializes analyzer with a similarity threshold and empty graph.
     def __init__(self, similaritythreshold = 25.0):
         self.similaritythreshold = similaritythreshold
         self.graph = nx.DiGraph()
 
+    # Compares a pair of images using pre-cached features.
     def comparePair(self, path1, path2, featurecache):
         img1, kp1, desc1, px1 = featurecache[path1]
         img2, kp2, desc2, px2 = featurecache[path2]
@@ -15,6 +17,7 @@ class ProvenanceAnalyzer:
         evidence2_1 = pm.compareFromFeatures(img2, kp2, desc2, px2, img1, kp1, desc1, px1)
         return evidence1_2, evidence2_1
 
+    # Builds a similarity matrix by comparing images pairwise.
     def buildSimilarityMatrix(self, imgpaths):
         similarities = {}
 
@@ -32,6 +35,7 @@ class ProvenanceAnalyzer:
     
         return similarities
     
+    # Constructs a directed provenance graph from extracted data.
     def buildProvenanceGraph(self, similarities):
         graph = nx.DiGraph()
         
@@ -45,6 +49,7 @@ class ProvenanceAnalyzer:
         self.graph = graph
         return graph
 
+    # Optimizes the graph by finding the maximum spanning arborescence for each component.
     def optimiseGraph(self):
         finalgraph = nx.DiGraph()
         
@@ -59,6 +64,7 @@ class ProvenanceAnalyzer:
             finalgraph = nx.compose(finalgraph, mst)
         self.graph = finalgraph
 
+    # Full analysis pipeline.
     def analyzeProvenance(self, folderpath):
         
         imagepaths = [os.path.join(folderpath, f)
@@ -71,6 +77,7 @@ class ProvenanceAnalyzer:
     
         return self.graph
     
+    # Infers directionality between two images.
     def inferDirection(self, imgA, imgB, evidenceAB, evidenceBA):
         pixelsA = evidenceAB.img1pixels
         pixelsB = evidenceAB.img2pixels
@@ -85,6 +92,7 @@ class ProvenanceAnalyzer:
         else:
             return imgA, imgB
     
+    # Finds all possible root nodes in the graph.
     def rootCandidates(self):
         roots = [node for node in self.graph.nodes if self.graph.in_degree(node) == 0]
         return roots

@@ -12,6 +12,8 @@ from ProvenanceAnalysis import ProvenanceAnalyzer
 
 
 class ProvenanceGUI:
+    
+    # Initializes main GUI window and instance variables.
     def __init__(self, root):
         self.root = root
         self.root.title("Image Provenance Analysis")
@@ -102,11 +104,13 @@ class ProvenanceGUI:
         self.graph_canvas.bind("<Configure>", self._on_graph_resize)
 
 
+    # Opens a dialog so the user can select an image folder.
     def _browse_folder(self):
         folder = filedialog.askdirectory(title="Select Image Folder")
         if folder:
             self.folderpath.set(folder)
             
+    # Starts the analysis in a separate thread.
     def _start_analysis(self):
         folder = self.folderpath.get().strip()
         if not folder or not os.path.isdir(folder):
@@ -123,6 +127,7 @@ class ProvenanceGUI:
         thread = threading.Thread(target=self._run_analysis, args=(folder,), daemon=True)
         thread.start()
 
+    # The main analysis loop that runs in a background thread.
     def _run_analysis(self, folder):
         try:
             imagepaths = sorted([
@@ -173,6 +178,7 @@ class ProvenanceGUI:
             self.root.after(0, lambda e=str(exc): messagebox.showerror("Error", e))
             self.root.after(0, lambda: self.run_btn.configure(state=tk.NORMAL))
 
+    # Update UI with results when analysis is done.
     def _analysis_done(self, results):
         self.comparison_results = results
         self.progress["value"] = 100
@@ -190,12 +196,14 @@ class ProvenanceGUI:
             self.pair_list.selection_set(0)
             self._show_pair(0)
 
+    # Handles the selection of a pair.
     def _on_pair_select(self, event):
         sel = self.pair_list.curselection()
         if sel:
             self._show_pair(sel[0])
             self.view_match_btn.configure(state=tk.NORMAL)
 
+    # Displays the details for a selected comparison pair.
     def _show_pair(self, index):
         p1, p2, ev12, ev21 = self.comparison_results[index]
         self.photo_refs.clear()
@@ -226,6 +234,7 @@ class ProvenanceGUI:
 
         self._set_stats("\n".join(lines))
 
+    # Shows the feature match visualization for the selected pair.
     def _show_matches_visualisation(self):
         sel = self.pair_list.curselection()
         if not sel:
@@ -235,6 +244,7 @@ class ProvenanceGUI:
         thread = threading.Thread(target=pm.compareImages, args=(p1, p2, True), daemon=True)
         thread.start()
 
+    # Formats the statistics for a one direction A -> B.
     def _format_direction_stats(self, label, nameA, nameB, ev):
         lines = []
         lines.append(f"  Direction  {label}  ({nameA} → {nameB})")
@@ -252,6 +262,7 @@ class ProvenanceGUI:
         lines.append("")
         return lines
 
+    # Loads an image, creates a thumbnail and displays it in a label.
     def _set_thumbnail(self, path, label, max_size=400):
         img = cv2.imread(path)
         if img is None:
@@ -264,15 +275,18 @@ class ProvenanceGUI:
         self.photo_refs.append(photo)
         label.configure(image=photo, text="")
 
+    # Sets text in the statistics text widget.
     def _set_stats(self, text):
         self.stats_text.configure(state=tk.NORMAL)
         self.stats_text.delete("1.0", tk.END)
         self.stats_text.insert(tk.END, text)
         self.stats_text.configure(state=tk.DISABLED)
 
+    # Redraws the provenance graph when the canvas is resized.
     def _on_graph_resize(self, _event):
         self._draw_graph()
 
+    # Draws the provenance graph on the canvas.
     def _draw_graph(self):
         if not hasattr(self, "graph_canvas"):
             return
@@ -364,6 +378,7 @@ class ProvenanceGUI:
                 canvas.create_text(x, y - node_radius - 10, text="ROOT",
                                    fill="#2b7a2b", font=("Consolas", 8, "bold"))
 
+    # Clears the detail panel.
     def _clear_detail(self):
         self.photo_refs.clear()
         self.img_label_a.configure(image="", text="")

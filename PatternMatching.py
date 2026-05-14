@@ -177,11 +177,3 @@ def compareFromFeatures(img1, kp1, desc1, pixels1, img2, kp2, desc2, pixels2):
     kp2, goodMatches, inliers, H, score, hquality, det, _ = coreMatch(img1, kp1, desc1, img2, kp2, desc2)
 
     return ProvenanceEvidence(score, len(inliers), len(goodMatches), len(kp1), len(kp2), det, pixels1, pixels2)
-
-
-if __name__ == "__main__":
-    imgA = r"C:\Users\User\Documents\GitHub\FYP---Digital-Forensics\TestPath\ringroad.jpg" # Original img
-    imgB = r"C:\Users\User\Documents\GitHub\FYP---Digital-Forensics\TestPath\ringroad2.jpg" # Derivation img
-
-    evidence = compareImages(imgA, imgB, showMatches = True)
-    print(f"Similarity score: {evidence.score:.2f}  \n Inliers: {evidence.inliers}  \nGood matches: {evidence.good_matches}")

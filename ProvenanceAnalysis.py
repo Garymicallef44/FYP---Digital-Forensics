@@ -88,19 +88,3 @@ class ProvenanceAnalyzer:
     def rootCandidates(self):
         roots = [node for node in self.graph.nodes if self.graph.in_degree(node) == 0]
         return roots
-
-
-if __name__ == "__main__":
-    datasetfolder = r"C:\Users\User\Documents\GitHub\FYP---Digital-Forensics\TestPath"
-
-    analyser = ProvenanceAnalyzer(similaritythreshold = 25.0)
-    provenancegraph = analyser.analyzeProvenance(datasetfolder)
-
-    print("\nInferred Provenance Graph:")
-    for u, v, data in provenancegraph.edges(data = True):
-        print(f"{u} -> {v} (similarity: {data['weight']:.2f}%)")
-
-    roots = analyser.rootCandidates()
-    print("\nMost likely root candidate(s):")
-    for root in roots:
-        print(root)
